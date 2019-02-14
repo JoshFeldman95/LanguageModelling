@@ -13,7 +13,7 @@ class TrigramModel(object):
     def fit(self, train_iter):
         self.ngram_counts = [self._get_ngram_counts(train_iter, n) for n in [1,2,3]]
 
-    def predict(self, text):
+    def predict(self, text, predict_last = false):
         """Make prediction on named tensor with dimensions 'batch' and 'seqlen'
         """
         batch = text.transpose('batch','seqlen').values.numpy()
@@ -22,6 +22,8 @@ class TrigramModel(object):
 
         for batch_id, text in enumerate(batch):
             for word_id, word in enumerate(text):
+                if predict_last and word_id != (len(text) - 1):
+                    continue
                 minus1 = word
                 if (word_id-1) >= 0:
                     minus2 = text[word_id-1]

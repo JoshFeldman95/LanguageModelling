@@ -64,30 +64,40 @@ class TrigramModel(object):
                 count.update(ngrams)
         return count
 
-class MLP(ntorch.nn.Module):
+class NeuralNetwork(ntorch.nn.Module):
     def __init__():
         pass
 
     def forward():
         pass
 
-    def fit():
+    def fit(self, train_iter):
         pass
 
-    def predict():
+    def predict(self, text, predict_last = False):
         pass
 
 class LSTM(ntorch.nn.Module):
-    def __init__():
+    def __init__(self, hidden_size, layers, TEXT, device = 'cpu'):
+        super(LSTM, self).__init__()
+        self.pretrained_embeddings = TEXT.vocab.vectors.to(device)
+        self.embedding = torch.nn.Embedding.from_pretrained(self.pretrained_embeddings, freeze=True)
+        self.lstm = torch.nn.LSTM(TEXT.vocab.vectors.shape[1], hidden_size, bidirectional=True)
+        self.lstm_dropout = torch.nn.Dropout(0.2)
+        self.linear = torch.nn.Linear(2*hidden_size, len(TEXT.vocab.itos))
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x, (hn, cn) = self.lstm(x)
+        x = self.lstm_dropout(x)
+        x = self.linear(x)
+        return x
+
+
+    def fit(self, train_iter):
         pass
 
-    def forward():
-        pass
-
-    def fit():
-        pass
-
-    def predict():
+    def predict(self, text, predict_last = False):
         pass
 
 class Extension(ntorch.nn.Module):
@@ -100,5 +110,5 @@ class Extension(ntorch.nn.Module):
     def fit():
         pass
 
-    def predict():
+    def predict(self, text, predict_last = False):
         pass

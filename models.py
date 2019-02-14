@@ -13,7 +13,7 @@ class TrigramModel(object):
     def fit(self, train_iter):
         self.ngram_counts = [self._get_ngram_counts(train_iter, n) for n in [1,2,3]]
 
-    def predict(self, text, predict_last = false):
+    def predict(self, text, predict_last = False):
         """Make prediction on named tensor with dimensions 'batch' and 'seqlen'
         """
         batch = text.transpose('batch','seqlen').values.numpy()

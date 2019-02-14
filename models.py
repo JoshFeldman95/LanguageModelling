@@ -71,10 +71,10 @@ class MLP(ntorch.nn.Module):
     def forward():
         pass
 
-    def fit():
+    def fit(self, train_iter):
         pass
 
-    def predict():
+    def predict(self, text, predict_last = False):
         pass
 
 class LSTM(ntorch.nn.Module):
@@ -84,10 +84,10 @@ class LSTM(ntorch.nn.Module):
     def forward():
         pass
 
-    def fit():
+    def fit(self, train_iter):
         pass
 
-    def predict():
+    def predict(self, text, predict_last = False):
         pass
 
 class Extension(ntorch.nn.Module):
@@ -100,5 +100,5 @@ class Extension(ntorch.nn.Module):
     def fit():
         pass
 
-    def predict():
+    def predict(self, text, predict_last = False):
         pass

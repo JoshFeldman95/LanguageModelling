@@ -128,7 +128,8 @@ class LSTM(ntorch.nn.Module):
         print('Finished Training')
 
     def predict(self, text, predict_last = False):
-        pass
+        pred = self(text)
+        return pred
 
 class Extension(ntorch.nn.Module):
     def __init__():

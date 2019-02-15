@@ -6,8 +6,8 @@ import numpy as np
 
 from namedtensor import ntorch, NamedTensor
 
-def make_kaggle_submission(model, TEXT, path_to_data = "./data/input.txt"):
-    kaggle_input = load_kaggle_data(path_to_data, TEXT)
+def make_kaggle_submission(model, TEXT, path_to_data = "./data/input.txt", device = 'cpu'):
+    kaggle_input = load_kaggle_data(path_to_data, TEXT, device)
     pred = model.predict(kaggle_input, predict_last=True)
 
     _, top20 = pred[{'seqlen':-1}].values.topk(20, dim = 1)
@@ -18,7 +18,7 @@ def make_kaggle_submission(model, TEXT, path_to_data = "./data/input.txt"):
             predictions = [TEXT.vocab.itos[word] for word in text]
             print("%d,%s"%(i, " ".join(predictions)), file=fout)
 
-def load_kaggle_data(path_to_data, TEXT, device = 'cpu'):
+def load_kaggle_data(path_to_data, TEXT, device):
     with open(path_to_data) as f:
         data = f.read()
     sentences = [sent for sent in data.split('\n')[:-1]]

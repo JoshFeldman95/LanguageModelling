@@ -78,24 +78,54 @@ class NeuralNetwork(ntorch.nn.Module):
         pass
 
 class LSTM(ntorch.nn.Module):
-    def __init__(self, hidden_size, layers, TEXT, device = 'cpu'):
+    def __init__(self, TEXT, hidden_size=50, layers=1, dropout = 0.2, device = 'cpu'):
         super(LSTM, self).__init__()
-        self.pretrained_embeddings = TEXT.vocab.vectors.to(device)
-        self.embedding = torch.nn.Embedding.from_pretrained(self.pretrained_embeddings, freeze=True)
-        self.lstm = torch.nn.LSTM(TEXT.vocab.vectors.shape[1], hidden_size, bidirectional=True)
-        self.lstm_dropout = torch.nn.Dropout(0.2)
-        self.linear = torch.nn.Linear(2*hidden_size, len(TEXT.vocab.itos))
+        self.TEXT = TEXT
+        self.pretrained_emb = TEXT.vocab.vectors.to(device)
+        self.embedding = ntorch.nn.Embedding.from_pretrained(self.pretrained_emb, freeze=True)
+        self.lstm = ntorch.nn.LSTM(self.pretrained_emb.shape[1], hidden_size, bidirectional=True).spec("embedding", "seqlen", "lstm")
+        self.lstm_dropout = ntorch.nn.Dropout(dropout)
+        self.linear = ntorch.nn.Linear(2*hidden_size, len(TEXT.vocab.itos)).spec('lstm', 'out')
 
     def forward(self, x):
         x = self.embedding(x)
-        x, (hn, cn) = self.lstm(x)
+        x, _ = self.lstm(x)
         x = self.lstm_dropout(x)
         x = self.linear(x)
         return x
 
+    def fit(self, train_iter, lr = 1e-2, momentum = 0.9, batch_size = 128, epochs = 10, interval = 1, device = 'cpu'):
+        self.to(device)
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum)
+        train_iter.batch_size = batch_size
 
-    def fit(self, train_iter):
-        pass
+        for epoch in range(epochs):  # loop over the dataset multiple times
+
+            running_loss = 0.0
+            for i, data in enumerate(train_iter, 0):
+                # get the inputs
+                inputs, labels = data.text, data.target
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs = self(inputs)
+                loss = criterion(
+                    outputs.transpose('batch', 'out', 'seqlen').values,
+                    labels.transpose('batch','seqlen').values
+                )
+                loss.backward()
+                optimizer.step()
+
+                # print statistics
+                running_loss += loss.item()
+                if i % interval == interval-1:    # print every 2000 mini-batches
+                    print('[epoch: {}, batch: {}] loss: {}'.format(epoch + 1, i + 1, running_loss / interval))
+                running_loss = 0.0
+
+        print('Finished Training')
 
     def predict(self, text, predict_last = False):
         pass

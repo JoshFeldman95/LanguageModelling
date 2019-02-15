@@ -8,13 +8,13 @@ from namedtensor.text import NamedField
 
 import math
 
-def load_text(debug = False, device = 'cpu'):
+def load_text(path, debug = False, device = 'cpu'):
     # Our input $x$
     TEXT = NamedField(names=("seqlen",))
 
     # Data distributed with the assignment
     train, val, test = torchtext.datasets.LanguageModelingDataset.splits(
-        path="./data",
+        path=path,
         train="train.txt", validation="valid.txt", test="valid.txt", text_field=TEXT)
     #When debugging you may want to use a smaller vocab size. This will run much faster.
 

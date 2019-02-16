@@ -65,17 +65,59 @@ class TrigramModel(object):
         return count
 
 class NeuralNetwork(ntorch.nn.Module):
-    def __init__():
-        pass
+    def __init__(self, TEXT, hidden_sizes=[32, 64], dropout=.2, device='cpu'):
+        super().__init__()
+        self.TEXT = TEXT
+        self.pretrained_emb = TEXT.vocab.vectors.to(device)
+        self.embedding = ntorch.nn.Embedding.from_pretrained(self.pretrained_emb, freeze=True)
+        self.l1 = ntorch.nn.Linear(self.pretrained_emb.shape[1], hidden_sizes[0]).spec('embedding')
+        self.l2 = ntorch.nn.Linear(hidden_sizes[0], hidden_sizes[1]).spec('embedding')
+        self.l3 = ntorch.nn.Linear(hidden_sizes[1], len(TEXT.vocab.itos)).spec('embedding', 'out')
+        self.dropout = ntorch.nn.Dropout(dropout)
 
-    def forward():
-        pass
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.l1(x).relu()
+        x = self.l2(x).relu()
+        x = self.dropout(x)
+        return self.l3(x)
 
-    def fit(self, train_iter):
-        pass
+    def fit(self, train_iter, lr = 1e-2, momentum = 0.9, batch_size = 128, epochs = 10, interval = 1, device = 'cpu'):
+        self.to(device)
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        train_iter.batch_size = batch_size
+
+        for epoch in range(epochs):  # loop over the dataset multiple times
+
+            running_loss = 0.0
+            for i, data in enumerate(train_iter, 0):
+                # get the inputs
+                inputs, labels = data.text, data.target
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs = self.forward(inputs)
+                loss = criterion(
+                    outputs.transpose('batch','out','seqlen').values,
+                    labels.transpose('batch','seqlen').values
+                )
+                loss.backward()
+                optimizer.step()
+
+                # print statistics
+                running_loss += loss.item()
+                if i % interval == interval-1:    # print every 2000 mini-batches
+                    print('[epoch: {}, batch: {}] loss: {}'.format(epoch + 1, i + 1, running_loss / interval))
+                    running_loss = 0.0
+
+        print('Finished Training')
 
     def predict(self, text, predict_last = False):
-        pass
+        pred = self(text)
+        return pred
 
 class LSTM(ntorch.nn.Module):
     def __init__(self, TEXT, hidden_size=50, layers=1, dropout = 0.2, device = 'cpu'):
@@ -113,7 +155,7 @@ class LSTM(ntorch.nn.Module):
                 # forward + backward + optimize
                 outputs = self(inputs)
                 loss = criterion(
-                    outputs.transpose('batch', 'out', 'seqlen').values,
+                    outputs.transpose('batch','out','seqlen').values,
                     labels.transpose('batch','seqlen').values
                 )
                 loss.backward()

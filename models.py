@@ -65,7 +65,7 @@ class TrigramModel(object):
         return count
 
 class _NeuralNetworkLM(ntorch.nn.Module):
-    
+
     def __init__(self, TEXT, device):
         super().__init__()
         self.TEXT = TEXT
@@ -124,19 +124,30 @@ class _NeuralNetworkLM(ntorch.nn.Module):
 
 
 class NeuralNetwork(_NeuralNetworkLM):
-    def __init__(self, TEXT, hidden_sizes=[32, 64], dropout=.2, device='cpu'):
+    def __init__(self, TEXT, kernel_size=3, hidden_size=50, dropout=.2, device='cuda'):
         super().__init__(TEXT, device)
-        self.l1 = ntorch.nn.Linear(self.pretrained_emb.shape[1], hidden_sizes[0]).spec('embedding')
-        self.l2 = ntorch.nn.Linear(hidden_sizes[0], hidden_sizes[1]).spec('embedding')
-        self.l3 = ntorch.nn.Linear(hidden_sizes[1], len(TEXT.vocab.itos)).spec('embedding', 'out')
+        self.kernel = kernel_size
+        self.conv = ntorch.nn.Conv1d(
+            in_channels=self.pretrained_emb.shape[1],
+            kernel_size=kernel_size,
+            out_channels=hidden_size,
+            padding = self.kernel - 1,
+            stride=1
+        ).spec("embedding", "seqlen", "conv")
+
+        self.fc = ntorch.nn.Linear(hidden_size, len(TEXT.vocab.itos)).spec('conv', 'out')
         self.dropout = ntorch.nn.Dropout(dropout)
+
+        #self.l2 = ntorch.nn.Linear(hidden_sizes[0], hidden_sizes[1]).spec('embedding')
+        #self.l3 = ntorch.nn.Linear(hidden_sizes[1], len(TEXT.vocab.itos)).spec('embedding', 'out')
 
     def forward(self, x):
         x = self.embedding(x)
-        x = self.l1(x).relu()
-        x = self.l2(x).relu()
+        x = self.conv(x).relu()
+        x = x[{"seqlen": slice(0, x.shape['seqlen'] - self.kernel + 1)}]
         x = self.dropout(x)
-        return self.l3(x)
+        x = self.fc(x)
+        return x
 
 
 class LSTM(_NeuralNetworkLM):

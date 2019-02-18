@@ -6,7 +6,7 @@ import numpy as np
 
 from namedtensor import ntorch, NamedTensor
 
-def make_kaggle_submission(model, TEXT, path_to_data = "./data/", device = 'cpu'):
+def make_kaggle_submission(model, TEXT, path_to_data = "./data", device = 'cpu'):
     kaggle_input = load_kaggle_data(path_to_data+"/input.txt", TEXT, device)
     pred = model.predict(kaggle_input, predict_last=True)
 

@@ -80,6 +80,7 @@ class _NeuralNetworkLM(ntorch.nn.Module):
         train_iter.batch_size = batch_size
 
         for epoch in range(epochs):  # loop over the dataset multiple times
+            self.train()
             running_loss = 0.0
             for i, data in enumerate(train_iter, 0):
                 # get the inputs
@@ -105,6 +106,7 @@ class _NeuralNetworkLM(ntorch.nn.Module):
 
             running_loss = 0.
             val_count = 0.
+            self.eval()
             for i, data in enumerate(val_iter):
                 inputs, labels = data.text, data.target
                 outputs = self(inputs)

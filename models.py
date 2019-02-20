@@ -390,7 +390,6 @@ class Transformer(_NeuralNetworkLM):
     def __init__(
         self,
         TEXT,
-        hidden_size,
         num_layers,
         num_heads,
         total_key_depth,
@@ -423,7 +422,10 @@ class Transformer(_NeuralNetworkLM):
         """
         super().__init__(TEXT, device)
 
+        hidden_size = self.pretrained_emb.shape[1]
+
         self.timing_signal = self._gen_timing_signal(max_length, hidden_size)
+
 
         params = (
             hidden_size,
@@ -437,13 +439,9 @@ class Transformer(_NeuralNetworkLM):
             relu_dropout,
         )
 
-        self.embedding_proj = ntorch.nn.Linear(
-            self.pretrained_emb.shape[1], hidden_size, bias=False
-        )
         self.enc = [EncoderLayer(*params).to(device) for l in range(num_layers)]
 
         self.layer_norm = LayerNorm(hidden_size)
-        self.input_dropout = ntorch.nn.Dropout(input_dropout)
 
         self.word_proj = ntorch.nn.Linear(hidden_size, len(self.TEXT.vocab)).spec(
             "embedding", "out"
@@ -451,12 +449,6 @@ class Transformer(_NeuralNetworkLM):
 
     def forward(self, x):
         x = self.embedding(x)
-
-        # Add input dropout
-        x = self.input_dropout(x)
-
-        # Linear projection to hidden size
-        x = self.embedding_proj(x)
 
         # Add timing signal
         x = x + self.timing_signal[{"seqlen": slice(0, x.shape["seqlen"])}]

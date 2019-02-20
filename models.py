@@ -80,33 +80,28 @@ class TrigramModel(object):
 
 
 class _NeuralNetworkLM(ntorch.nn.Module):
-    def __init__(self, TEXT, device):
+    def __init__(self, TEXT, device, freeze_embedding):
         super().__init__()
         self.TEXT = TEXT
         self.device = device
         self.pretrained_emb = TEXT.vocab.vectors.to(device)
         self.embedding = ntorch.nn.Embedding.from_pretrained(
-            self.pretrained_emb, freeze=True
+            self.pretrained_emb, freeze=freeze_embedding
         )
+        self.val_loss = float('inf')
 
-    def fit(
-        self,
-        train_iter,
-        val_iter=[],
-        lr=1e-2,
-        momentum=0.9,
-        batch_size=128,
-        epochs=10,
-        interval=1,
-    ):
+    def fit(self, train_iter, val_iter=[], lr=1e-2, verbose=True,
+            batch_size=128, epochs=10, interval=1, early_stopping=False):
         self.to(self.device)
+        lr = torch.tensor(lr)
         criterion = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(self.parameters(), lr=lr, momentum=momentum)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         train_iter.batch_size = batch_size
 
         for epoch in range(epochs):  # loop over the dataset multiple times
             self.train()
             running_loss = 0.0
+            self.train()
             for i, data in enumerate(train_iter, 0):
                 # get the inputs
                 inputs, labels = data.text, data.target
@@ -117,7 +112,7 @@ class _NeuralNetworkLM(ntorch.nn.Module):
                 # forward + backward + optimize
                 outputs = self(inputs)
                 loss = criterion(
-                    outputs.transpose("batch", "out", "seqlen").values,
+                    outputs.transpose("batch", "classes", "seqlen").values,
                     labels.transpose("batch", "seqlen").values,
                 )
                 loss.backward()
@@ -126,11 +121,12 @@ class _NeuralNetworkLM(ntorch.nn.Module):
                 # print statistics
                 running_loss += loss.item()
                 if i % interval == interval - 1:  # print every 2000 mini-batches
-                    print(
-                        "[epoch: {}, batch: {}] loss: {}".format(
-                            epoch + 1, i + 1, running_loss / interval
+                    if verbose:
+                        print(
+                            "[epoch: {}, batch: {}] loss: {}".format(
+                                epoch + 1, i + 1, running_loss / interval
+                            )
                         )
-                    )
                     running_loss = 0.0
 
             running_loss = 0.0
@@ -140,14 +136,21 @@ class _NeuralNetworkLM(ntorch.nn.Module):
                 inputs, labels = data.text, data.target
                 outputs = self(inputs)
                 loss = criterion(
-                    outputs.transpose("batch", "out", "seqlen").values,
-                    labels.transpose("batch", "seqlen").values,
+                    outputs.transpose('batch','classes','seqlen').values,
+                    labels.transpose('batch','seqlen').values
                 )
                 running_loss += loss.item()
                 val_count += 1
-            print("Val loss: {}".format(running_loss / val_count))
+            prev_loss = self.val_loss
+            self.val_loss = running_loss / val_count
+            if verbose:
+                print(f'Val loss: {self.val_loss}, PPL: {np.exp(self.val_loss)}')
+            if self.val_loss > prev_loss and early_stopping:
+                break
+            lr *= .8
 
-        print("Finished Training")
+        if verbose:
+            print('Finished Training')
 
     def predict(self, text, predict_last=False):
         pred = self(text)
@@ -155,8 +158,9 @@ class _NeuralNetworkLM(ntorch.nn.Module):
 
 
 class NeuralNetwork(_NeuralNetworkLM):
-    def __init__(self, TEXT, kernel_size=3, hidden_size=50, dropout=0.2, device="cuda"):
-        super().__init__(TEXT, device)
+    def __init__(self, TEXT, kernel_size=3, hidden_size=50, dropout=0.2,
+                 device="cuda", freeze_embedding=True):
+        super().__init__(TEXT, device, freeze_embedding)
         self.kernel = kernel_size
         self.conv = ntorch.nn.Conv1d(
             in_channels=self.pretrained_emb.shape[1],
@@ -166,13 +170,8 @@ class NeuralNetwork(_NeuralNetworkLM):
             stride=1,
         ).spec("embedding", "seqlen", "conv")
 
-        self.fc = ntorch.nn.Linear(hidden_size, len(TEXT.vocab.itos)).spec(
-            "conv", "out"
-        )
+        self.fc = ntorch.nn.Linear(hidden_size, len(TEXT.vocab.itos)).spec("conv", "classes")
         self.dropout = ntorch.nn.Dropout(dropout)
-
-        # self.l2 = ntorch.nn.Linear(hidden_sizes[0], hidden_sizes[1]).spec('embedding')
-        # self.l3 = ntorch.nn.Linear(hidden_sizes[1], len(TEXT.vocab.itos)).spec('embedding', 'out')
 
     def forward(self, x):
         x = self.embedding(x)
@@ -184,15 +183,17 @@ class NeuralNetwork(_NeuralNetworkLM):
 
 
 class LSTM(_NeuralNetworkLM):
-    def __init__(self, TEXT, hidden_size=50, layers=1, dropout=0.2, device="cpu"):
-        super().__init__(TEXT, device)
+    def __init__(self, TEXT, hidden_size=50, layers=1, dropout=0.2,
+                 device="cpu", freeze_embedding=True):
+        super().__init__(TEXT, device, freeze_embedding)
         self.lstm = ntorch.nn.LSTM(
-            self.pretrained_emb.shape[1], hidden_size, bidirectional=True
+            self.pretrained_emb.shape[1],
+            hidden_size,
+            num_layers=layers,
+            bidirectional=False
         ).spec("embedding", "seqlen", "lstm")
         self.lstm_dropout = ntorch.nn.Dropout(dropout)
-        self.linear = ntorch.nn.Linear(2 * hidden_size, len(TEXT.vocab.itos)).spec(
-            "lstm", "out"
-        )
+        self.linear = ntorch.nn.Linear(hidden_size, len(TEXT.vocab.itos)).spec('lstm', 'classes')
 
     def forward(self, x):
         x = self.embedding(x)
@@ -203,17 +204,9 @@ class LSTM(_NeuralNetworkLM):
 
 
 class MultiHeadAttention(ntorch.nn.Module):
-    def __init__(
-        self,
-        input_depth,
-        total_key_depth,
-        total_value_depth,
-        output_depth,
-        num_heads,
-        bias_mask,
-        dropout=0,
-    ):
-        super(MultiHeadAttention, self).__init__()
+    def __init__(self, input_depth, total_key_depth, total_value_depth,
+                 output_depth, num_heads, bias_mask, dropout=0.):
+        super().__init__()
         if total_key_depth % num_heads != 0:
             raise ValueError(
                 "Key depth (%d) must be divisible by the number of "
@@ -402,6 +395,7 @@ class Transformer(_NeuralNetworkLM):
         relu_dropout=0.0,
         use_mask=False,
         device="cuda",
+        freeze_embedding=True
     ):
         """
         Parameters:
@@ -420,7 +414,7 @@ class Transformer(_NeuralNetworkLM):
             relu_dropout: Dropout probability after relu in FFN (Should be non-zero only during training)
             use_mask: Set to True to turn on future value masking
         """
-        super().__init__(TEXT, device)
+        super().__init__(TEXT, device, freeze_embedding)
 
         hidden_size = self.pretrained_emb.shape[1]
 
@@ -444,7 +438,7 @@ class Transformer(_NeuralNetworkLM):
         self.layer_norm = LayerNorm(hidden_size)
 
         self.word_proj = ntorch.nn.Linear(hidden_size, len(self.TEXT.vocab)).spec(
-            "embedding", "out"
+            "embedding", "classes"
         )
 
     def forward(self, x):
